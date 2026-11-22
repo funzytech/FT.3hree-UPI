@@ -1,0 +1,198 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 4.1: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Reusable hardened global primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Zero-lookup verified admin email check (safe for allow list queries with zero get()/exists() cost)
+    function isAdminEmail() {
+      return isVerifiedEmail() && request.auth.token.email == 'funzytechx@gmail.com';
+    }
+
+    // Full admin check for single-document operations
+    function isAdmin() {
+      return isAdminEmail() || (
+        isVerifiedEmail() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Blueprint: UserProfile
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email'])
+        && data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'email',
+          'photoURL',
+          'provider',
+          'emailVerified',
+          'createdAt',
+          'lastLoginAt'
+        ])
+        && data.uid is string
+        && data.uid == userId
+        && data.uid.size() >= 1
+        && data.uid.size() <= 128
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 120))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 2048))
+        && (!('provider' in data) || (data.provider is string && data.provider.size() <= 64))
+        && (!('emailVerified' in data) || data.emailVerified is bool)
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64))
+        && (!('lastLoginAt' in data) || (data.lastLoginAt is string && data.lastLoginAt.size() <= 64));
+    }
+
+    // Validation Blueprint: DonationSupporter (synchronized verbatim with firebase-blueprint.json)
+    function isValidDonationSupporter(data) {
+      return data.keys().hasAll([
+          'donorName',
+          'donorAvatar',
+          'amount',
+          'upiId',
+          'verificationStatus',
+          'publicConsent',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'donorName',
+          'donorAvatar',
+          'amount',
+          'upiId',
+          'verificationStatus',
+          'publicConsent',
+          'createdAt'
+        ])
+        && data.donorName is string
+        && data.donorName.size() >= 1
+        && data.donorName.size() <= 60
+        && data.donorAvatar is string
+        && data.donorAvatar.size() >= 20
+        && data.donorAvatar.size() <= 60000
+        && data.donorAvatar.matches('^data:image/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$')
+        && data.amount is number
+        && data.amount >= 0
+        && data.amount <= 10000000
+        && data.upiId is string
+        && data.upiId.size() >= 3
+        && data.upiId.size() <= 64
+        && data.verificationStatus is string
+        && (data.verificationStatus == 'pending_verification' || data.verificationStatus == 'verified')
+        && data.publicConsent is bool
+        && data.publicConsent == true
+        && data.createdAt is timestamp;
+    }
+
+    // Admin registry: strictly read-only for the admin themselves, never client-writable
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isOwner(adminId);
+      allow list, create, update, delete: if false;
+    }
+
+    // Private User Profiles (PII Isolation)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isVerifiedEmail()
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId);
+      allow update: if isValidId(userId)
+        && isVerifiedEmail()
+        && isValidUserProfile(incoming(), userId)
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().uid == existing().uid
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName',
+              'photoURL',
+              'lastLoginAt',
+              'emailVerified'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    // Real-Time Homepage Supporter Activity Feed
+    // Public supporters can read consented entries in real-time and submit a voluntary pending entry.
+    // Verification upgrades and moderation are strictly admin-only.
+    match /donation_supporters/{supporterId} {
+      allow get: if isValidId(supporterId) && (existing().publicConsent == true || isAdmin());
+      allow list: if existing().publicConsent == true || isAdminEmail();
+      allow create: if isValidId(supporterId)
+        && isValidDonationSupporter(incoming())
+        && incoming().verificationStatus == 'pending_verification'
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(supporterId)
+        && isAdmin()
+        && isValidDonationSupporter(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['verificationStatus']);
+      allow delete: if isValidId(supporterId) && isAdmin();
+    }
+
+    // Legacy collections preserved and hardened to admin-only
+    match /referrals/{referralId} {
+      allow get: if isValidId(referralId) && isAdmin();
+      allow list: if isAdminEmail();
+      allow create, update, delete: if isValidId(referralId) && isAdmin();
+    }
+
+    match /coupons/{couponId} {
+      allow get: if isValidId(couponId) && isAdmin();
+      allow list: if isAdminEmail();
+      allow create, update, delete: if isValidId(couponId) && isAdmin();
+    }
+
+    match /referral_events/{eventId} {
+      allow get: if isValidId(eventId) && isAdmin();
+      allow list: if isAdminEmail();
+      allow create, update, delete: if isValidId(eventId) && isAdmin();
+    }
+
+    match /visitors/{visitorId} {
+      allow get: if isValidId(visitorId) && isAdmin();
+      allow list: if isAdminEmail();
+      allow create, update, delete: if isValidId(visitorId) && isAdmin();
+    }
+
+    match /referral_redemptions/{redemptionId} {
+      allow get: if isValidId(redemptionId) && isAdmin();
+      allow list: if isAdminEmail();
+      allow create, update, delete: if isValidId(redemptionId) && isAdmin();
+    }
+  }
+}

@@ -1,0 +1,225 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and metadata",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Unique Firebase Authentication User ID"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Display name of the user from Google Auth"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 254,
+          "description": "User's email address"
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 2048,
+          "description": "URL to the user's avatar"
+        },
+        "provider": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Auth provider identifier"
+        },
+        "emailVerified": {
+          "type": "boolean",
+          "description": "Whether the user email is verified"
+        },
+        "createdAt": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "ISO timestamp or server timestamp when account profile was created"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "ISO timestamp or server timestamp of most recent login"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "DonationSupporter": {
+      "title": "DonationSupporter",
+      "description": "Voluntary public supporter entry displayed in real-time on the FT.3hree homepage activity carousel",
+      "type": "object",
+      "properties": {
+        "donorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Supporter display name voluntarily submitted for the homepage feed"
+        },
+        "donorAvatar": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 60000,
+          "pattern": "^data:image/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$",
+          "description": "Compressed 120x120 supporter avatar data URL"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Reported INR donation amount (0 when voluntary open amount)"
+        },
+        "upiId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 64,
+          "description": "Destination UPI ID (FT.3hree@okaxis)"
+        },
+        "verificationStatus": {
+          "type": "string",
+          "enum": ["pending_verification", "verified"],
+          "description": "Verification status; client submissions must start as pending_verification"
+        },
+        "publicConsent": {
+          "type": "boolean",
+          "description": "Explicit supporter consent to display name and avatar publicly on the homepage"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Firestore server timestamp when supporter entry was created"
+        }
+      },
+      "required": [
+        "donorName",
+        "donorAvatar",
+        "amount",
+        "upiId",
+        "verificationStatus",
+        "publicConsent",
+        "createdAt"
+      ]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "Unique referral coupon code record and performance counters",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "coupon_code": { "type": "string", "maxLength": 64 },
+        "referral_owner_id": { "type": "string", "maxLength": 128 },
+        "anonymous_referral_id": { "type": "string", "maxLength": 128 },
+        "discount_percentage": { "type": "number" },
+        "status": { "type": "string", "maxLength": 32 },
+        "created_at": { "type": "string", "maxLength": 64 },
+        "expires_at": { "type": "string", "maxLength": 64 },
+        "redeemed_at": { "type": "string", "maxLength": 64 },
+        "campaign_id": { "type": "string", "maxLength": 64 },
+        "shares_count": { "type": "number" },
+        "visits_count": { "type": "number" },
+        "bookings_count": { "type": "number" },
+        "conversions_count": { "type": "number" }
+      },
+      "required": ["id", "coupon_code", "status", "created_at", "expires_at"]
+    },
+    "ReferralEvent": {
+      "title": "ReferralEvent",
+      "description": "Audit record for tracking referral landing visits and bookings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 64 },
+        "type": { "type": "string", "maxLength": 32 },
+        "visitor_id": { "type": "string", "maxLength": 128 },
+        "is_self_referral": { "type": "boolean" },
+        "timestamp": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "code", "type", "timestamp"]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Secure single-use coupon record for atomic redemption",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 64 },
+        "discount_percentage": { "type": "number" },
+        "status": { "type": "string", "maxLength": 32 },
+        "is_redeemed": { "type": "boolean" },
+        "redemption_count": { "type": "number" },
+        "max_uses": { "type": "number" },
+        "owner_id": { "type": "string", "maxLength": 128 },
+        "anonymous_referral_id": { "type": "string", "maxLength": 128 },
+        "created_at": { "type": "string", "maxLength": 64 },
+        "expires_at": { "type": "string", "maxLength": 64 },
+        "redeemed_at": { "type": "string", "maxLength": 64 },
+        "redeemed_booking_id": { "type": "string", "maxLength": 128 },
+        "redeemed_by_visitor_id": { "type": "string", "maxLength": 128 },
+        "redeemed_by_email": { "type": "string", "maxLength": 254 },
+        "updated_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "code", "discount_percentage", "status", "created_at", "expires_at"]
+    },
+    "Visitor": {
+      "title": "Visitor",
+      "description": "Smart returning user profile with persistent identity and referral association",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "visitor_uuid": { "type": "string", "maxLength": 128 },
+        "account_id": { "type": "string", "maxLength": 128 },
+        "owned_referral_codes": { "type": "array" },
+        "redeemed_coupons": { "type": "array" },
+        "created_at": { "type": "string", "maxLength": 64 },
+        "last_seen_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "created_at"]
+    },
+    "ReferralRedemption": {
+      "title": "ReferralRedemption",
+      "description": "Authoritative immutable record of a confirmed referral redemption transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "referral_code": { "type": "string", "maxLength": 64 },
+        "visitor_id": { "type": "string", "maxLength": 128 },
+        "booking_id": { "type": "string", "maxLength": 128 },
+        "discount_applied": { "type": "number" },
+        "status": { "type": "string", "maxLength": 32 },
+        "redeemed_at": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "referral_code", "visitor_id", "booking_id", "redeemed_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private user profile documents, accessible only by the authenticated owner"
+    },
+    "/donation_supporters/{supporterId}": {
+      "schema": "DonationSupporter",
+      "description": "Public real-time supporter activity feed entries with strict schema, consent, and status enforcement"
+    },
+    "/referrals/{referralId}": {
+      "schema": "Referral",
+      "description": "Legacy referral records, restricted to admin"
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Legacy single-use coupons, restricted to admin"
+    },
+    "/referral_events/{eventId}": {
+      "schema": "ReferralEvent",
+      "description": "Legacy referral tracking audit trail, restricted to admin"
+    },
+    "/visitors/{visitorId}": {
+      "schema": "Visitor",
+      "description": "Legacy visitor profiles, restricted to admin"
+    },
+    "/referral_redemptions/{redemptionId}": {
+      "schema": "ReferralRedemption",
+      "description": "Legacy immutable referral redemption ledger, restricted to admin"
+    }
+  }
+}
